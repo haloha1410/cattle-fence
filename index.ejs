@@ -1,0 +1,157 @@
+<!-- Previous path -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Map API</title>
+
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id="coordinates-info"></div>
+    <script>
+        var marker_arr = [];
+
+        // This one <------------------------------------------------------>
+        // var input_lat = -7.250445;
+        // var input_lng = 112.768845;
+        // This one <------------------------------------------------------>
+
+        var input_lat = parseFloat('<%= locals.lat %>');
+        var input_lng = parseFloat('<%= locals.lng %>');
+        var board_number = '<%= locals.board_number %>';
+        var map;
+        var prev_loc = [];
+
+        async function initMap() {
+            var loc = { lat: input_lat, lng: input_lng };
+
+            const { Map } = await google.maps.importLibrary("maps");
+            map = new Map(document.getElementById("map"), {
+                center: { lat: input_lat, lng: input_lng },
+                zoom: 14,
+                mapId: "4504f8b37365c3d0",
+            });
+
+            var drawingManager = new google.maps.drawing.DrawingManager({
+                drawingMode: null,
+                drawingControl: true,
+                drawingControlOptions: {
+                    position: google.maps.ControlPosition.TOP_CENTER,
+                    drawingModes: [google.maps.drawing.OverlayType.POLYGON]
+                },
+                polygonOptions: {
+                    fillColor: '#FF0000',
+                    fillOpacity: 0.8,
+                    strokeWeight: 2,
+                    clickable: false,
+                    editable: true,
+                    zIndex: 1,
+                },
+            });
+            drawingManager.setMap(map);
+
+            var coordinatesInfoElement = document.getElementById('coordinates-info');
+            google.maps.event.addListener(drawingManager, 'polygoncomplete', function (polygon) {
+                var coordinates = polygon.getPath().getArray().map(function (latLng) {
+                    return { lat: latLng.lat(), lng: latLng.lng() };
+                });
+                var coordinatesText = coordinates.map(function (coord) {
+                    return 'Lat: ' + coord.lat + ', Lng: ' + coord.lng;
+                }).join('<br>');
+
+                coordinatesInfoElement.innerHTML = 'Polygon Coordinates:<br>' + coordinatesText;
+                window.polygon = polygon;
+            });
+
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => {
+                    for (let i = 0; i < 5; i++) {
+                        new_marker_loc = { lat: parseFloat(data[i].lat), lng: parseFloat(data[i].lng) };
+                        updateMarker(new_marker_loc, data[i].board_number, map);
+                        prev_loc[i] = { lat: data[i].lat, lng: data[i].lng };
+                    }
+                })
+
+            // This one <------------------------------------------------------>
+            // fetch(`/previous-path?bn=${board_number}`)
+            //     .then(response => response.json())
+            //     .then(data => {
+            //         for (let i = 0; i < data.length; i++) {
+            //             new_marker_loc = { lat: parseFloat(data[i].lat), lng: parseFloat(data[i].lng) };
+            //             updateMarkerWithTime(new_marker_loc, data[i].board_number, data[i].time, map);
+            //         }
+            //     })
+            // This one <------------------------------------------------------>
+        }
+    </script>
+    <script>
+        function loadGoogleMapsScript() {
+            const script = document.createElement('script');
+            script.src = src = "https://maps.googleapis.com/maps/api/js?v=3.55&key=AIzaSyCW5POKTKI3Qm6tMlG6ypwExaH822zqoas&callback=initMap&libraries=drawing, geometry";
+            script.defer = true;
+            document.head.appendChild(script);
+        }
+        window.onload = loadGoogleMapsScript;
+    </script>
+    <script>
+        function removePolygon() {
+            if (window.polygon) {
+                window.polygon.setMap(null);
+            }
+        }
+        async function updateMarkerWithTime(newmarker, local_board_number, time, the_map) {
+            const marker = new google.maps.Marker({
+                map: the_map, position: { lat: newmarker.lat, lng: newmarker.lng }, label: { color: '#000000', fontWeight: 'bold', fontSize: '14px', text: 'Board ' + local_board_number + " Time " + time }
+            });
+            marker.setMap(the_map);
+            marker_arr[local_board_number] = marker;
+            console.log("Adding marker");
+        }
+
+        async function updateMarker(newmarker, local_board_number, the_map) {
+            const marker = new google.maps.Marker({
+                map: the_map, position: { lat: newmarker.lat, lng: newmarker.lng }, label: { color: '#000000', fontWeight: 'bold', fontSize: '14px', text: 'Board ' + local_board_number }
+            });
+            marker.setMap(the_map);
+            marker_arr[local_board_number] = marker;
+            console.log("Adding marker");
+        }
+
+        const intervalUpdate = setInterval(updateMap, 10000);
+
+        function updateMap() {
+            var cur_marker = [];
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    for (let i = 0; i < 5; i++) {
+                        cur_marker[i] = { lat: parseFloat(data[i].lat), lng: parseFloat(data[i].lng) };
+                        if (prev_loc[i].lat != cur_marker[i].lat || prev_loc[i].lng != cur_marker[i].lng) {
+
+                            console.log("Deleting marker");
+
+                            marker_arr[data[i].board_number].setMap(null);
+                            prev_loc[i].lat = cur_marker[i].lat;
+                            prev_loc[i].lng = cur_marker[i].lng;
+                            updateMarker(cur_marker[i], data[i].board_number, map);
+                        }
+                    }
+                })
+        }
+    </script>
+</body>
+
+</html>
